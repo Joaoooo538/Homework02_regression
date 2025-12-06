@@ -62,6 +62,7 @@ print("\nDimensões dos preditores de teste: ",x_test.shape)
 #======================================================
 
 
+# ------------> ADICIONAR UM VIOLIN PLOT ANTES E DEPOIS <------------- 
 
 # ✅ Ajuste para diminuir o skewness com Box-Cox ===================================================================================================
 #GARANTIR QUE USE O BOXCOX NO TREINO, GUARDE OS LAMBDAS E APLIQUE ELES NO TESTE, FAZER TUDO JUNTO PODE VAZAR TENDENCIA DO 
@@ -100,19 +101,6 @@ x_train_ajusted_norm = (x_train_ajusted - mean_train) / std_train   #Padronizaç
 
 
 
-# ❌ (NÃO É NECESSÁRIO NESSE CÓDIGO) - Estimação da matriz de covariância  =====================================================
-# 1.Checagem de colineariadada, 1.2 Resolução de colinearidade se existir, 2. Cálculo da matriz de covariância.
-#rank_train = np.linalg.matrix_rank(x_train_ajusted_norm)    #checagem da colinearidade entre as features, deve dar n_col = rank (completo).
-#print("\nPosto da matriz:", rank_train)                 
-#
-#if rank_train == x_train_ajusted_norm.shape[1]:
-#    #print("\nMatriz de posto completo")
-#    cov_matrix_train = np.cov(x_train_ajusted_norm.T)   #calculo sob a matriz transposta pois cada feature deve estar em linha e são colunas no original.
-#    #print(cov_matrix_train, cov_matrix_train.shape)  # gerando a matriz 11x11 de covariãncia.
-#===============================================================================================================================
-
-
-
 # ✅ Calculo do PCA nativo =====================================================================================================
 # Com o calculo nativo nao precisamos passar a matriz de covariância, apenas os dados, ele calculará da mesma forma e fará a
 # mesma checagem de posto.
@@ -129,7 +117,7 @@ print("\n Dimensionalidade de treino trasnf.: ",x_train_pca.shape)  # Dimensiona
 #================================================================================================================================
 
 
-
+#=============================================🎯 INICIO DA FASE DE TREINO 🎯====================================================
 # ✅ Regressão multivariada via Mínimos quadrados (OLS) =========================================================================
 # Y = b0 + b1x1 + b2x2 ... + bnxn + e , sendo x cada uma das features
 # ou seja temos 9 + 1 colunas, contando com o b0, adicionamos entao essa coluna
@@ -157,7 +145,8 @@ print("\nR2 de treino:", r2_train)
 
 #=============================================🧪 INICIO DA FASE DE TESTES 🧪=====================================================
 # ✅ Adaptação do conjunto de testes e aplicação do modelo =======================================================================
-#Aplicando todas as trasnformações no conjunto de testes denovo com os todos os parametros obtidos do TREINO (media, dp, lambdas, PCA, shifts e betas)
+# Aplicando todas as trasnformações no conjunto de testes denovo com os todos os parametros obtidos do TREINO (media, dp, lambdas, 
+# PCA, shifts e betas)
 
 #boxcox com lambdas salvos
 x_test_ajusted = x_test.copy()
@@ -187,21 +176,25 @@ y_mean_test = np.mean(y_test)
 r2_test = 1 - np.sum((y_test - y_predict_test)**2) / np.sum((y_test - y_mean_test)**2)
 print("\nR2 de teste:", r2_test)
 
-
-
 #Sobre as estatísticas
 #Treino baixo + Teste baixo -> ✅ BOM
 #Treino baixo + Teste alto  -> ❌ OVERFITTING
 #Treino alto + Teste alto   -> ❌ UNDERFITTING
 #Treino alto + Teste baixo  -> (erro no código)
+#Modelo atual puxa sempre pro "Meio", nao tem complexidade suficiente pra se adequar as nao liearidades dos dados.
 #=================================================================================================================================
 
 
-
-
+# COMPARACAO MANUAL DAS PREDIÇÕES
+#comparacao = pd.DataFrame({
+#    "y_real": y_test.values[:10].flatten(),
+#    "y_pred": y_predict_test[:10].flatten()
+#})
+#print(comparacao)
 
 
 #modelo pra implementação futura
+
 #=============================== K-fold implementation ============================
 #from sklearn.model_selection import KFold
 #
