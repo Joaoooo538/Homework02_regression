@@ -1,0 +1,140 @@
+import pandas as pd
+import numpy as np
+from scipy.stats import boxcox
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+
+
+# ✅ Carregamento do csv  ================================
+database = pd.read_csv("winequality-red.csv", sep=";")
+print("\nDimensões do conjunto completo: ", database.shape)
+# =======================================================
+
+
+
+# ✅ Shuffle ================================================================
+ind_shuffle = np.random.permutation(len(database))          #cria os indicies
+database = database.iloc[ind_shuffle].reset_index(drop=True)#embaralha
+# ==========================================================================
+
+
+
+# ✅ Separação de features e target ========================================
+x_database = database.drop(columns=["quality"])
+y_database = database["quality"]
+# ==========================================================================
+
+
+
+# ✅ Cálculo do Skewness pra ajeitar =======================================
+skew = x_database.skew()
+# ==========================================================================
+
+
+
+# ✅ Separação treino e teste ==============================================
+n = int(np.floor(len(database)/3))
+data_train = database[:2*n]
+data_test = database[2*n:]
+
+y_train = y_database[:2*n]
+x_train = x_database[:2*n]
+y_test = y_database[2*n:]
+x_test = x_database[2*n:]
+
+#print("\nDimensões dos preditores de treino: ", x_train.shape)
+#print("\nDimensões dos preditores de teste: ", x_test.shape)
+# ==========================================================================
+
+
+
+# ✅ Ajuste Box-Cox =========================================================
+x_train_ajusted = x_train.copy()
+lambdas = {}
+shifts = {}
+for col in x_train_ajusted.columns:
+    val = x_train_ajusted[col].values
+    if np.any(val <= 0):                # Garantir valores positivos (SHIFT)
+        shift = abs(np.min(val)) + 1e-6
+        val = val + shift
+        shifts[col] = shift             # Guarda os SHIFT pra depois
+    else:
+        shifts[col] = 0.0
+
+    transf_val, boxcox_lambda = boxcox(val)
+    x_train_ajusted[col] = transf_val   
+    lambdas[col] = boxcox_lambda        # Guarda os lambda pra depois
+# ==========================================================================
+
+
+
+# ✅ Z-Score para PCA =============================================================
+mean_train = np.mean(x_train_ajusted, axis=0)  # Esses dois vao ser usados no teste
+std_train = np.std(x_train_ajusted, axis=0)    # Pra Z-score de la
+x_train_ajusted_norm = (x_train_ajusted - mean_train) / std_train
+# =================================================================================
+
+
+
+# ✅ PCA completo ===========================================================
+pca = PCA()
+pca.fit(x_train_ajusted_norm)
+
+print("\nVariância explicada cumulativa:")
+print(pca.explained_variance_ratio_.cumsum())
+
+n_pcs = 9       # Decidir de acordo com a % de Variância explicada (97+)
+pca_reduzido = PCA(n_components=n_pcs)
+pca_reduzido.fit(x_train_ajusted_norm)
+
+x_train_pca = pca_reduzido.transform(x_train_ajusted_norm)
+print("\nDimensionalidade de treino transformado: ", x_train_pca.shape)
+# ==========================================================================
+
+
+#============================================= 🎯 INICIO DA FASE DE TREINO 🎯====================================================
+# ✅ Regressão multivariada via Mínimos quadrados (OLS) nativo do ScikitLearn ====================================================
+ols = LinearRegression(fit_intercept=True)      # cria o objeto do tipo LinearRegression que por padrao é OLS com o intercepto já
+ols.fit(x_train_pca, y_train)                   # aplica nos dados de treino apenas com o .fit
+
+
+#===================== Informações do modelo ===============================
+#print("\nIntercepto:", ols.intercept_)          # B0 do modelo
+#print("Betas:", ols.coef_)                      # 9 B's restantes do modelo
+#===========================================================================
+
+
+# AVALIAÇÃO DO TREINO
+y_predict_train = ols.predict(x_train_pca)                          # obj.predict pega as predições do modelo nos dados passados
+rmse_train = np.sqrt(mean_squared_error(y_train, y_predict_train))  # Raiz do MSE nativo do Sktlearn.metrics
+r2_train = r2_score(y_train, y_predict_train)                       # R2 nativo do Sktlearn.metrics
+
+print("\nRMSE de treino do nétodo nativo:", rmse_train)                     
+print("R2 de treino do método nativo  :", r2_train)            
+# ================================================================================================================================
+
+
+
+#=============================================🧪 INICIO DA FASE DE TESTES 🧪=====================================================
+# Box-Cox no teste ---------------------------------------------------------------------------------------------------------------
+x_test_ajusted = x_test.copy()
+for col in x_test.columns:
+    val_test = x_test_ajusted[col].values + shifts[col]         # mesmo shift do treino
+    x_test_ajusted[col] = boxcox(val_test, lmbda=lambdas[col])  # mesmo lambda do treino
+
+# Z-score usando stats do TREINO -------------------------------------------------------------------------------------------------
+x_test_ajusted_norm = (x_test_ajusted - mean_train) / std_train # Usar as metricas do Treino tbm no Z-score
+
+# PCA usando modelo treinado -----------------------------------------------------------------------------------------------------
+x_test_pca = pca_reduzido.transform(x_test_ajusted_norm)        # Usando o mesmo PCA desenvolvido no treino
+
+# Predição no teste --------------------------------------------------------------------------------------------------------------
+y_predict_test = ols.predict(x_test_pca)                        # variavel que guarda predições do modelo
+rmse_test = np.sqrt(mean_squared_error(y_test, y_predict_test)) # calculo normal do RMSE com o MSE nativo Sktlearn.metrics
+r2_test = r2_score(y_test, y_predict_test)                      # Nativo R2 do Sktlearn.metrics
+
+# ================================================================================================================================
+
+print("\nRMSE de teste do nétodo nativo :", rmse_test)
+print("R2 de teste do método nativo   :", r2_test)
