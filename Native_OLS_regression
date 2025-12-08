@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import boxcox
 from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, RidgeCV, LassoCV
 from sklearn.metrics import mean_squared_error, r2_score
 
 
@@ -138,3 +138,111 @@ r2_test = r2_score(y_test, y_predict_test)                      # Nativo R2 do S
 
 print("\nRMSE de teste do nétodo nativo :", rmse_test)
 print("R2 de teste do método nativo   :", r2_test)
+
+# ================================================================================================================================
+# (RIDGE E LASSO)
+# ================================================================================================================================
+
+print("\n" + "="*80)
+print("INICIANDO A EGULARIZAÇÃO (RIDGE E LASSO)")
+print("="*80)
+# --- RIDGE REGRESSION (L2) ---
+print("\n--- RIDGE REGRESSION (CV Automático) ---")
+
+# Testamos vários alphas (força da penalidade)
+alphas_range = np.logspace(-2, 2, 50) # De 0.01 a 100
+
+# CV=5 garante a validação cruzada que o Leo queria
+ridge_model = RidgeCV(alphas=alphas_range, cv=5)
+ridge_model.fit(x_train_ajusted_norm, y_train)
+
+# Previsão no Teste
+y_pred_ridge = ridge_model.predict(x_test_ajusted_norm)
+
+# Métricas
+rmse_ridge = np.sqrt(mean_squared_error(y_test, y_pred_ridge))
+r2_ridge = r2_score(y_test, y_pred_ridge)
+
+print(f"Melhor Alpha Ridge: {ridge_model.alpha_:.4f}")
+print(f"RMSE Ridge: {rmse_ridge:.5f}")
+print(f"R² Ridge:   {r2_ridge:.5f}")
+
+
+# --- 2.2 LASSO REGRESSION (L1) ---
+print("\n--- LASSO REGRESSION (Seleção de Variáveis) ---")
+
+# O Lasso zera coeficientes. Vamos ver se ele joga fora alguma variável quimica.
+lasso_model = LassoCV(cv=5, random_state=42, max_iter=10000)
+lasso_model.fit(x_train_ajusted_norm, y_train)
+
+y_pred_lasso = lasso_model.predict(x_test_ajusted_norm)
+
+rmse_lasso = np.sqrt(mean_squared_error(y_test, y_pred_lasso))
+r2_lasso = r2_score(y_test, y_pred_lasso)
+
+print(f"Melhor Alpha Lasso: {lasso_model.alpha_:.6f}")
+print(f"RMSE Lasso: {rmse_lasso:.5f}")
+print(f"R² Lasso:   {r2_lasso:.5f}")
+
+# --- 2.3 ANÁLISE DO LASSO (O que foi zerado?) ---
+print("\n>>> Variáveis eliminadas pelo Lasso:")
+# Pegamos os nomes das colunas originais
+colunas_originais = x_database.columns
+coeficientes = pd.Series(lasso_model.coef_, index=colunas_originais)
+
+# Mostra quem foi zerado
+zerados = coeficientes[coeficientes == 0]
+if len(zerados) > 0:
+    print(f"O Lasso zerou {len(zerados)} variáveis: {list(zerados.index)}")
+    print("Isso indica que essas variáveis podem ser irrelevantes para a qualidade.")
+else:
+    print("Nenhuma variável foi zerada (Todas são importantes).")
+
+print("\n" + "="*80)
+
+# ================================================================================================================================
+# ETAPA 4: REDE NEURAL (MLP)
+# ================================================================================================================================
+
+from sklearn.neural_network import MLPRegressor
+
+print("\n" + "="*80)
+print("INICIANDO ETAPA 4: REDE NEURAL (MLP Regressor)")
+print("="*80)
+
+# Configuração da Rede Neural (Perceptron Multicamadas)
+# Escolhas dos parâmetros:
+# 1. hidden_layer_sizes=(100,): Uma camada oculta com 100 neurônios. É um bom ponto de partida pra esse tamanho de dataset.
+# 2. activation='relu': Padrão ouro pra regressão, funciona melhor que sigmoide pra evitar gradiente sumindo.
+# 3. solver='adam': Otimizador eficiente pra datasets desse tamanho (alguns milhares de linhas).
+# 4. max_iter=5000: Botei alto de propósito. O padrão (200) as vezes não é suficiente pra convergir e fica dando warning chato.
+# 5. random_state=42: Pra garantir que se rodar de novo, dá o mesmo resultado.
+
+mlp_model = MLPRegressor(hidden_layer_sizes=(100,), 
+                         activation='relu', 
+                         solver='adam', 
+                         max_iter=5000, 
+                         random_state=42)
+
+# Treinamento
+# 'x_train_ajusted_norm' já foi tratado com Z-Score lá em cima.
+print("Treinando a rede neural...")
+mlp_model.fit(x_train_ajusted_norm, y_train)
+
+# Previsão no conjunto de teste
+y_pred_mlp = mlp_model.predict(x_test_ajusted_norm)
+
+# Cálculo das métricas finais
+rmse_mlp = np.sqrt(mean_squared_error(y_test, y_pred_mlp))
+r2_mlp = r2_score(y_test, y_pred_mlp)
+
+print(f"RMSE Rede Neural: {rmse_mlp:.5f}")
+print(f"R² Rede Neural:   {r2_mlp:.5f}")
+
+# Pequena lógica pra responder a pergunta do PDF sobre "Nonlinear vs Linear"
+print("\n>>> Veredito: Rede Neural vs Linear (OLS/Lasso)")
+if r2_mlp > r2_test: # r2_test é o do OLS/PCR que calculamos antes
+    print("A Rede Neural superou o modelo linear. Isso sugere que existem relações não-lineares nos dados químicos.")
+else:
+    print("A Rede Neural NÃO superou significativamente o linear. O problema parece ser predominantemente linear ou ter muito ruído.")
+print("="*80)
