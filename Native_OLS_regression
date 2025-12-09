@@ -1,8 +1,12 @@
+# Primeiro análise e pré processamento e então aplicação do modelo (SEM O PCA) OLS da biblioteca scikit learn
+# Na primeira rodagem só se faz o modelo simples separando treino e teste usualmente (2/3 e 1/3)
+# Também foram usados Z-score e Box-Cox como em todos os outros códigos
+# ✅ Para setores terminados e ❌ para incompletos
+
 import pandas as pd
 import numpy as np
 from scipy.stats import boxcox
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression, RidgeCV, LassoCV
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 
 
@@ -11,7 +15,7 @@ database = pd.read_csv("winequality-red.csv", sep=";")
 print("\nDimensões do conjunto completo: ", database.shape)
 # =======================================================
 
-
+np.random.seed(42)
 
 # ✅ Shuffle ================================================================
 ind_shuffle = np.random.permutation(len(database))          #cria os indicies
@@ -69,7 +73,7 @@ for col in x_train_ajusted.columns:
 
 
 
-# ✅ Z-Score para PCA =============================================================
+# ✅ Z-Score ======================================================================
 mean_train = np.mean(x_train_ajusted, axis=0)  # Esses dois vao ser usados no teste
 std_train = np.std(x_train_ajusted, axis=0)    # Pra Z-score de la
 x_train_ajusted_norm = (x_train_ajusted - mean_train) / std_train
@@ -77,26 +81,10 @@ x_train_ajusted_norm = (x_train_ajusted - mean_train) / std_train
 
 
 
-# ✅ PCA completo ===========================================================
-pca = PCA()
-pca.fit(x_train_ajusted_norm)
-
-print("\nVariância explicada cumulativa:")
-print(pca.explained_variance_ratio_.cumsum())
-
-n_pcs = 9       # Decidir de acordo com a % de Variância explicada (97+)
-pca_reduzido = PCA(n_components=n_pcs)
-pca_reduzido.fit(x_train_ajusted_norm)
-
-x_train_pca = pca_reduzido.transform(x_train_ajusted_norm)
-print("\nDimensionalidade de treino transformado: ", x_train_pca.shape)
-# ==========================================================================
-
-
 #============================================= 🎯 INICIO DA FASE DE TREINO 🎯====================================================
 # ✅ Regressão multivariada via Mínimos quadrados (OLS) nativo do ScikitLearn ====================================================
 ols = LinearRegression(fit_intercept=True)      # cria o objeto do tipo LinearRegression que por padrao é OLS com o intercepto já
-ols.fit(x_train_pca, y_train)                   # aplica nos dados de treino apenas com o .fit
+ols.fit(x_train_ajusted_norm, y_train)                   # aplica nos dados de treino apenas com o .fit
 
 
 #===================== Informações do modelo ===============================
@@ -106,7 +94,7 @@ ols.fit(x_train_pca, y_train)                   # aplica nos dados de treino ape
 
 
 # AVALIAÇÃO DO TREINO
-y_predict_train = ols.predict(x_train_pca)                          # obj.predict pega as predições do modelo nos dados passados
+y_predict_train = ols.predict(x_train_ajusted_norm)                          # obj.predict pega as predições do modelo nos dados passados
 rmse_train = np.sqrt(mean_squared_error(y_train, y_predict_train))  # Raiz do MSE nativo do Sktlearn.metrics
 r2_train = r2_score(y_train, y_predict_train)                       # R2 nativo do Sktlearn.metrics
 
@@ -126,11 +114,9 @@ for col in x_test.columns:
 # Z-score usando stats do TREINO -------------------------------------------------------------------------------------------------
 x_test_ajusted_norm = (x_test_ajusted - mean_train) / std_train # Usar as metricas do Treino tbm no Z-score
 
-# PCA usando modelo treinado -----------------------------------------------------------------------------------------------------
-x_test_pca = pca_reduzido.transform(x_test_ajusted_norm)        # Usando o mesmo PCA desenvolvido no treino
 
 # Predição no teste --------------------------------------------------------------------------------------------------------------
-y_predict_test = ols.predict(x_test_pca)                        # variavel que guarda predições do modelo
+y_predict_test = ols.predict(x_test_ajusted_norm)                        # variavel que guarda predições do modelo
 rmse_test = np.sqrt(mean_squared_error(y_test, y_predict_test)) # calculo normal do RMSE com o MSE nativo Sktlearn.metrics
 r2_test = r2_score(y_test, y_predict_test)                      # Nativo R2 do Sktlearn.metrics
 
@@ -138,111 +124,3 @@ r2_test = r2_score(y_test, y_predict_test)                      # Nativo R2 do S
 
 print("\nRMSE de teste do nétodo nativo :", rmse_test)
 print("R2 de teste do método nativo   :", r2_test)
-
-# ================================================================================================================================
-# (RIDGE E LASSO)
-# ================================================================================================================================
-
-print("\n" + "="*80)
-print("INICIANDO A EGULARIZAÇÃO (RIDGE E LASSO)")
-print("="*80)
-# --- RIDGE REGRESSION (L2) ---
-print("\n--- RIDGE REGRESSION (CV Automático) ---")
-
-# Testamos vários alphas (força da penalidade)
-alphas_range = np.logspace(-2, 2, 50) # De 0.01 a 100
-
-# CV=5 garante a validação cruzada que o Leo queria
-ridge_model = RidgeCV(alphas=alphas_range, cv=5)
-ridge_model.fit(x_train_ajusted_norm, y_train)
-
-# Previsão no Teste
-y_pred_ridge = ridge_model.predict(x_test_ajusted_norm)
-
-# Métricas
-rmse_ridge = np.sqrt(mean_squared_error(y_test, y_pred_ridge))
-r2_ridge = r2_score(y_test, y_pred_ridge)
-
-print(f"Melhor Alpha Ridge: {ridge_model.alpha_:.4f}")
-print(f"RMSE Ridge: {rmse_ridge:.5f}")
-print(f"R² Ridge:   {r2_ridge:.5f}")
-
-
-# --- 2.2 LASSO REGRESSION (L1) ---
-print("\n--- LASSO REGRESSION (Seleção de Variáveis) ---")
-
-# O Lasso zera coeficientes. Vamos ver se ele joga fora alguma variável quimica.
-lasso_model = LassoCV(cv=5, random_state=42, max_iter=10000)
-lasso_model.fit(x_train_ajusted_norm, y_train)
-
-y_pred_lasso = lasso_model.predict(x_test_ajusted_norm)
-
-rmse_lasso = np.sqrt(mean_squared_error(y_test, y_pred_lasso))
-r2_lasso = r2_score(y_test, y_pred_lasso)
-
-print(f"Melhor Alpha Lasso: {lasso_model.alpha_:.6f}")
-print(f"RMSE Lasso: {rmse_lasso:.5f}")
-print(f"R² Lasso:   {r2_lasso:.5f}")
-
-# --- 2.3 ANÁLISE DO LASSO (O que foi zerado?) ---
-print("\n>>> Variáveis eliminadas pelo Lasso:")
-# Pegamos os nomes das colunas originais
-colunas_originais = x_database.columns
-coeficientes = pd.Series(lasso_model.coef_, index=colunas_originais)
-
-# Mostra quem foi zerado
-zerados = coeficientes[coeficientes == 0]
-if len(zerados) > 0:
-    print(f"O Lasso zerou {len(zerados)} variáveis: {list(zerados.index)}")
-    print("Isso indica que essas variáveis podem ser irrelevantes para a qualidade.")
-else:
-    print("Nenhuma variável foi zerada (Todas são importantes).")
-
-print("\n" + "="*80)
-
-# ================================================================================================================================
-# ETAPA 4: REDE NEURAL (MLP)
-# ================================================================================================================================
-
-from sklearn.neural_network import MLPRegressor
-
-print("\n" + "="*80)
-print("INICIANDO ETAPA 4: REDE NEURAL (MLP Regressor)")
-print("="*80)
-
-# Configuração da Rede Neural (Perceptron Multicamadas)
-# Escolhas dos parâmetros:
-# 1. hidden_layer_sizes=(100,): Uma camada oculta com 100 neurônios. É um bom ponto de partida pra esse tamanho de dataset.
-# 2. activation='relu': Padrão ouro pra regressão, funciona melhor que sigmoide pra evitar gradiente sumindo.
-# 3. solver='adam': Otimizador eficiente pra datasets desse tamanho (alguns milhares de linhas).
-# 4. max_iter=5000: Botei alto de propósito. O padrão (200) as vezes não é suficiente pra convergir e fica dando warning chato.
-# 5. random_state=42: Pra garantir que se rodar de novo, dá o mesmo resultado.
-
-mlp_model = MLPRegressor(hidden_layer_sizes=(100,), 
-                         activation='relu', 
-                         solver='adam', 
-                         max_iter=5000, 
-                         random_state=42)
-
-# Treinamento
-# 'x_train_ajusted_norm' já foi tratado com Z-Score lá em cima.
-print("Treinando a rede neural...")
-mlp_model.fit(x_train_ajusted_norm, y_train)
-
-# Previsão no conjunto de teste
-y_pred_mlp = mlp_model.predict(x_test_ajusted_norm)
-
-# Cálculo das métricas finais
-rmse_mlp = np.sqrt(mean_squared_error(y_test, y_pred_mlp))
-r2_mlp = r2_score(y_test, y_pred_mlp)
-
-print(f"RMSE Rede Neural: {rmse_mlp:.5f}")
-print(f"R² Rede Neural:   {r2_mlp:.5f}")
-
-# Pequena lógica pra responder a pergunta do PDF sobre "Nonlinear vs Linear"
-print("\n>>> Veredito: Rede Neural vs Linear (OLS/Lasso)")
-if r2_mlp > r2_test: # r2_test é o do OLS/PCR que calculamos antes
-    print("A Rede Neural superou o modelo linear. Isso sugere que existem relações não-lineares nos dados químicos.")
-else:
-    print("A Rede Neural NÃO superou significativamente o linear. O problema parece ser predominantemente linear ou ter muito ruído.")
-print("="*80)

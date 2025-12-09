@@ -1,3 +1,8 @@
+# Primeiro a separação dos folds e divisão dos k-folds, depois os métodos de normalização pra cada configuração de fold
+# Aqui usamos o modelo OLS comum e sem PCA pra redução de dimensionalidade, apenas Z-score e box-cox
+# Vamos fazer com 7 folders, o treino é feito com todos os folds, exceto o que virou teste na rodada
+# ✅ Para setores terminados e ❌ para incompletos
+
 import os
 import numpy as np
 import pandas as pd
@@ -5,6 +10,7 @@ from scipy.stats import boxcox
 from sklearn.decomposition import PCA
 from sklearn.model_selection import KFold
 
+# SEM PCA
 
 
 # ✅ Carregamento do csv  =============================
@@ -67,14 +73,14 @@ for train_index, test_index in k_folds.split(X):        # K-fold cria os indices
     std_train = np.std(X_train_ajusted, axis=0)                     # lembrar de usar os mesmos std e mean no fim
     X_train_norm = (X_train_ajusted - mean_train) / std_train
 
-    # PCA -------------------------------------------------------------------------------------------------------------------------
-    n_pcs = 9
-    pca = PCA(n_components=n_pcs)
-    X_train_pca = pca.fit_transform(X_train_norm)
+    ## PCA -------------------------------------------------------------------------------------------------------------------------
+    #n_pcs = 9
+    #pca = PCA(n_components=n_pcs)
+    #X_train_pca = pca.fit_transform(X_train_norm)
     
     #=============================================🎯 INICIO DA FASE DE TREINO 🎯=====================================================
-    X_train_pca_bias = np.column_stack([np.ones(X_train_pca.shape[0]), X_train_pca])                # Adiciona o intercepto
-    betas = np.linalg.inv(X_train_pca_bias.T @ X_train_pca_bias) @ (X_train_pca_bias.T @ y_train)   # Usa o modelo na mão
+    X_train_bias = np.column_stack([np.ones(X_train_norm.shape[0]), X_train_norm])                # Adiciona o intercepto
+    betas = np.linalg.inv(X_train_bias.T @ X_train_bias) @ (X_train_bias.T @ y_train)   # Usa o modelo na mão
     #=================================================================================================================================
 
 
@@ -88,11 +94,10 @@ for train_index, test_index in k_folds.split(X):        # K-fold cria os indices
         X_test_ajusted[col] = boxcox(val_test, lmbda=lambdas[col])
     
     X_test_norm = (X_test_ajusted - mean_train) / std_train
-    X_test_pca = pca.transform(X_test_norm)
-    X_test_pca_bias = np.column_stack([np.ones(X_test_pca.shape[0]), X_test_pca])
+    X_test_norm_bias = np.column_stack([np.ones(X_test_norm.shape[0]), X_test_norm])
     
     # --- Previsão e métricas ---
-    y_pred = X_test_pca_bias @ betas
+    y_pred = X_test_norm_bias @ betas
     rmse_fold = np.sqrt(np.mean((y_test - y_pred)**2))
     r2_fold = 1 - np.sum((y_test - y_pred)**2) / np.sum((y_test - np.mean(y_test))**2)
     
