@@ -62,27 +62,50 @@ x_test_ajusted_norm = (x_test_ajusted - mean_train) / std_train
 
 print("Dados preparados. Iniciando Rede Neural...\n")
 
-# ==============================================================================
-# 2. MODELO REDE NEURAL
-# ==============================================================================
+# =============================================================================
+# 4. REDE NEURAL (MLP)
+# =============================================================================
+# Mudanças baseadas em Grid Search para evitar Overfitting e bater a Linear:
+# 1. activation='tanh': Curvas mais suaves
+# 2. alpha=1.0: Penalidade alta para evitar decorar dados
+# 3. learning_rate_init=0.01: Convergência mais rápida
 
-print("--- REDE NEURAL (MLP Regressor) ---")
+mlp_tunada = MLPRegressor(
+    hidden_layer_sizes=(64, 32),       
+    activation='tanh',                 
+    solver='adam',
+    alpha=1.0,                         
+    learning_rate_init=0.01,           
+    max_iter=5000,
+    early_stopping=True,
+    validation_fraction=0.1,
+    random_state=42
+)
 
-# Configuração: 1 camada oculta com 100 neurônios, max_iter alto (5000)
-mlp_model = MLPRegressor(hidden_layer_sizes=(100,), 
-                         activation='relu', 
-                         solver='adam', 
-                         max_iter=5000, 
-                         random_state=42)
+mlp_tunada.fit(x_train_ajusted_norm, y_train)
 
-mlp_model.fit(x_train_ajusted_norm, y_train)
-
-# Previsão
-y_pred_mlp = mlp_model.predict(x_test_ajusted_norm)
+# Predições
+y_pred_train = mlp_tunada.predict(x_train_ajusted_norm)
+y_pred_test = mlp_tunada.predict(x_test_ajusted_norm)
 
 # Métricas
-rmse_mlp = np.sqrt(mean_squared_error(y_test, y_pred_mlp))
-r2_mlp = r2_score(y_test, y_pred_mlp)
+rmse_train = np.sqrt(mean_squared_error(y_train, y_pred_train))
+r2_train = r2_score(y_train, y_pred_train)
 
-print(f"RMSE Rede Neural: {rmse_mlp:.5f}")
-print(f"R² Rede Neural:   {r2_mlp:.5f}")
+rmse_test = np.sqrt(mean_squared_error(y_test, y_pred_test))
+r2_test = r2_score(y_test, y_pred_test)
+
+print("--- RESULTADOS FINAIS ---")
+print(f"RMSE Treino: {rmse_train:.5f}")
+print(f"R² Treino:   {r2_train:.5f}")
+print("-" * 30)
+print(f"RMSE Teste:  {rmse_test:.5f}")
+print(f"R² Teste:    {r2_test:.5f}")
+
+print("\n--- Tabela Comparativa (y_real vs y_pred) ---")
+comparacao = pd.DataFrame({
+    "y_real": y_test.values,
+    "y_pred": y_pred_test
+})
+
+print(comparacao.head(20))
