@@ -102,6 +102,15 @@ x_train_ajusted_norm = (x_train_ajusted - mean_train) / std_train   #Padronizaç
 # ✅ Calculo do PCA nativo =====================================================================================================
 # Com o calculo nativo nao precisamos passar a matriz de covariância, apenas os dados, ele calculará da mesma forma e fará a
 # mesma checagem de posto.
+# -------------- Posto da matriz de covariância -------------------------------------
+cov_matrix = np.cov(x_train_ajusted_norm, rowvar=False)  # cada coluna é uma variável
+rank_cov = np.linalg.matrix_rank(cov_matrix)
+n,p = x_train_ajusted_norm.shape
+if(rank_cov == p):
+    print(f"Posto cheio: {rank_cov}, não há colinearidade")
+else:
+    print(f"Posto incompleto:{rank_cov}, há colinearidade")
+#------------------------------------------------------------------------------------
 pca = PCA()
 pca.fit(x_train_ajusted_norm)           # PCA completo pra retorno de todos os PCS e 
 print ("\n \nVariância explicada por componente principal", pca.explained_variance_ratio_.cumsum(),"\n\n")    # variância explicada cumulativa
